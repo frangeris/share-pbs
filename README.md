@@ -54,7 +54,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main
 > Set a quota on the folder for your friend. Without a quota, your friend can fill your storage.
 
 <details>
-<summary><strong>Prefer doing a manual install? ↓</strong></summary>
+<summary><h2>Prefer doing a manual install? ↓</h2></summary>
 
 Same steps as the script, by hand.
 
