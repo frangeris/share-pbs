@@ -20,6 +20,8 @@ Make sure you have the following (proxmox and rclone LXC containers) installed a
 
 > This guide only helps you to configure PBS and rclone assuming that are LXC. It does not install them, you need to do it before hand ⤴.
 
+> Tailscale must be installed on both LXC containers before you start.
+
 ## 1. Start on your Proxmox host (assuming PBS / rclone are LXC)
 
 As a container shares the kernel of the host. Only the host can give it `/dev/net/tun`.
