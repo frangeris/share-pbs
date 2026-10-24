@@ -19,8 +19,13 @@ finish() { msg "$1"; echo "$1"; }
 
 [ "$(id -u)" -eq 0 ] || die "Run this script as root."
 [ -c /dev/net/tun ] || die "/dev/net/tun is missing. Pass it to this LXC from the Proxmox host."
-command -v rclone >/dev/null || die "rclone is not installed. Install it in this LXC first."
-rclone serve s3 --help >/dev/null 2>&1 || die "This rclone is too old for serve s3. Install a newer version."
+RCLONE=
+# /opt/rclone/rclone is where the Proxmox community script installs it, outside of PATH.
+for p in "$(command -v rclone || true)" /usr/local/bin/rclone /usr/bin/rclone /opt/rclone/rclone; do
+  [ -x "$p" ] && { RCLONE=$p; break; }
+done
+[ -n "$RCLONE" ] || die "rclone is not installed. Install it in this LXC first."
+"$RCLONE" serve s3 --help >/dev/null 2>&1 || die "This rclone is too old for serve s3. Install a newer version."
 
 if [ -f "$CONF/env" ]; then
   # Second start: keep the stored settings.
@@ -102,7 +107,7 @@ Wants=network-online.target
 [Service]
 EnvironmentFile=$CONF/env
 ExecStartPre=$(command -v nft) -f $CONF/lan-block.nft
-ExecStart=$(command -v rclone) serve s3 \${DATA_DIR} --addr :\${PORT} --cert $CONF/cert.pem --key $CONF/key.pem --auth-key \${ACCESS_KEY},\${SECRET_KEY}
+ExecStart=$RCLONE serve s3 \${DATA_DIR} --addr :\${PORT} --cert $CONF/cert.pem --key $CONF/key.pem --auth-key \${ACCESS_KEY},\${SECRET_KEY}
 Restart=on-failure
 
 [Install]

@@ -138,7 +138,7 @@ In the rclone LXC, as `root`. The commands use the folder `/srv/s3`, the bucket 
    EOF
    ```
 
-7. Make the systemd service. If `command -v rclone` shows another path, use it instead of `/usr/bin/rclone`:
+7. Make the systemd service. If rclone is in another folder, for example `/opt/rclone/rclone`, use that path instead of `/usr/bin/rclone`:
 
    ```bash
    cat > /etc/systemd/system/rclone-s3.service <<'EOF'
