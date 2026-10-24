@@ -48,13 +48,31 @@ for id in $PBS_CTID $RCLONE_CTID; do \
 done
 ```
 
-## 2. Then, on PBS:
+## 2. Mount the backup storage on the rclone LXC
+
+rclone saves the backups in a folder. If the folder is not a mount point, the backups go to the system disk of the LXC. When this disk is full, the LXC stops.
+
+A mount point gives the folder its own storage. Set the container ID, the Proxmox storage, and the size in GiB:
+
+```bash
+RCLONE_CTID=123 STORAGE=local-lvm SIZE=500
+```
+
+Add the mount point and reboot the rclone LXC:
+
+```bash
+pct set $RCLONE_CTID -mp0 $STORAGE:$SIZE,mp=/srv/backups-s3 && pct reboot $RCLONE_CTID
+```
+
+The size is also the limit for the backups. To use the web interface, select the LXC, then **Resources**, **Add**, **Mount Point**.
+
+## 3. Then, on PBS:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main/setup-pbs.sh)"
 ```
 
-## 3. Finally on rclone:
+## 4. Finally on rclone:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main/setup-rclone.sh)"
