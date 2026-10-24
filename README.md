@@ -48,7 +48,13 @@ for id in $PBS_CTID $RCLONE_CTID; do \
 done
 ```
 
-## 2. Mount the backup storage on the rclone LXC
+## 2. Then, on PBS:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main/setup-pbs.sh)"
+```
+
+## 3. Mount the backup storage on the rclone LXC
 
 rclone saves the backups in a folder. If the folder is not a mount point, the backups go to the system disk of the LXC. When this disk is full, the LXC stops.
 
@@ -65,12 +71,6 @@ pct set $RCLONE_CTID -mp0 $STORAGE:$SIZE,mp=/srv/backups-s3 && pct reboot $RCLON
 ```
 
 The size is also the limit for the backups. To use the web interface, select the LXC, then **Resources**, **Add**, **Mount Point**.
-
-## 3. Then, on PBS:
-
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main/setup-pbs.sh)"
-```
 
 ## 4. Finally on rclone:
 
