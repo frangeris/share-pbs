@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Configure the rclone LXC: install Tailscale and serve a folder as S3 over HTTPS.
 # Run as root inside the LXC. Dialogs ask for DATA_DIR, the folder for the backups
-# (/srv/s3), BUCKET (pbs) and PORT (8443).
+# (/srv/backups-s3), BUCKET (pbs) and PORT (8443).
 # A variable in the environment changes the value that a dialog shows. ACCESS_KEY
 # and SECRET_KEY have no dialog: set them in the environment, or the script keeps
 # the values of an earlier run, or makes random values.
@@ -52,7 +52,7 @@ done
 if [ -f "$CONF/env" ]; then
   while IFS== read -r k v; do [ -n "${!k:-}" ] || printf -v "$k" %s "$v"; done < "$CONF/env"
 fi
-DATA_DIR=$(ask "Folder for the backups" "${DATA_DIR:-/srv/s3}")
+DATA_DIR=$(ask "Folder for the backups" "${DATA_DIR:-/srv/backups-s3}")
 BUCKET=$(ask "Bucket name" "${BUCKET:-pbs}")
 PORT=$(ask "HTTPS port" "${PORT:-8443}")
 
@@ -60,12 +60,13 @@ PORT=$(ask "HTTPS port" "${PORT:-8443}")
 [[ $PORT =~ ^[0-9]+$ ]] || die "The port must be a number."
 # Without a mount, rclone writes to the disk of the LXC and can fill it.
 if ! mountpoint -q "$DATA_DIR"; then
-  wt --defaultno --yesno "$DATA_DIR is not a mount point.
+  wt --defaultno --yesno "Warning!
 
-rclone will write the backups to the disk of this LXC. A full disk stops the LXC.
-Mount a folder at $DATA_DIR instead.
+$DATA_DIR is a simple folder in this container, not a mounted disk.
 
-Continue?" 13 70 || exit 1
+rclone saves the backups on the disk of this LXC. If this disk is full, the LXC stops.
+
+Continue anyway?" 13 70 || exit 1
 fi
 
 : >"$LOG"
