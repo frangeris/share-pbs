@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Configure the rclone LXC: join Tailscale and serve a folder as S3 over HTTPS.
+# Configure the rclone LXC: serve a folder as S3 over HTTPS. Tailscale must be ready first.
 # Run as root inside the LXC. Dialogs ask for DATA_DIR, the folder for the backups
 # (/srv/s3), BUCKET (pbs) and PORT (8443).
 # A variable in the environment changes the value that a dialog shows. ACCESS_KEY
@@ -9,16 +9,28 @@ set -euo pipefail
 
 CONF=/etc/rclone-s3
 TITLE="Share PBS"
+LOG=/var/log/share-pbs.log
+# The output is hidden: an apt prompt would wait for an answer that nobody can see.
+export DEBIAN_FRONTEND=noninteractive
 
-msg() { whiptail --title "$TITLE" --msgbox "$1" 0 0; }
+# whiptail leaves the dialog on the screen: clear it and keep the exit status.
+wt() { local rc=0; whiptail --title "$TITLE" "$@" || rc=$?; clear; return "$rc"; }
+msg() { wt --msgbox "$1" 0 0; }
 die() { msg "$1"; exit 1; }
 # whiptail draws on stdout and writes the answer to stderr: swap them to catch the answer.
-ask() { whiptail --title "$TITLE" --inputbox "$1" 10 70 "$2" 3>&1 1>&2 2>&3; }
-# Print the text after the dialog: a closed dialog leaves nothing in the terminal to copy.
-finish() { msg "$1"; echo "$1"; }
+ask() { wt --inputbox "$1" 10 70 "$2" 3>&1 1>&2 2>&3; }
+# Run a command with its output in $LOG and a loading dialog on the screen.
+run() {
+  local text=$1; shift
+  whiptail --title "$TITLE" --infobox "$text..." 0 0
+  "$@" </dev/null >>"$LOG" 2>&1 || die "$text did not complete. Last lines of $LOG:
+
+$(tail -n 8 "$LOG")"
+}
 
 [ "$(id -u)" -eq 0 ] || die "Run this script as root."
 [ -c /dev/net/tun ] || die "/dev/net/tun is missing. Pass it to this LXC from the Proxmox host."
+tailscale ip -4 >/dev/null 2>&1 || die "Tailscale is not ready. Install it and run tailscale up, then start this script again."
 RCLONE=
 # /opt/rclone/rclone is where the Proxmox community script installs it, outside of PATH.
 for p in "$(command -v rclone || true)" /usr/local/bin/rclone /usr/bin/rclone /opt/rclone/rclone; do
@@ -42,7 +54,7 @@ fi
 [[ $PORT =~ ^[0-9]+$ ]] || die "The port must be a number."
 # Without a mount, rclone writes to the disk of the LXC and can fill it.
 if ! mountpoint -q "$DATA_DIR"; then
-  whiptail --title "$TITLE" --defaultno --yesno "$DATA_DIR is not a mount point.
+  wt --defaultno --yesno "$DATA_DIR is not a mount point.
 
 rclone will write the backups to the disk of this LXC. A full disk stops the LXC.
 Mount a folder at $DATA_DIR instead.
@@ -50,15 +62,9 @@ Mount a folder at $DATA_DIR instead.
 Continue?" 13 70 || exit 1
 fi
 
-apt-get update
-command -v curl >/dev/null || apt-get install -y curl
-curl -fsSL https://tailscale.com/install.sh | sh
-systemctl enable --now tailscaled
-
-# Do not add --accept-routes: it sends LAN traffic through the subnet router.
-tailscale ip -4 >/dev/null 2>&1 || tailscale up
-
-apt-get install -y jq openssl nftables
+: >"$LOG"
+run "Updating package lists" apt-get update
+run "Installing jq, openssl and nftables" apt-get install -y jq openssl nftables
 
 mkdir -p "$DATA_DIR/$BUCKET" "$CONF"
 fqdn=$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')
@@ -77,7 +83,7 @@ EOF
 fi
 
 if [ ! -f "$CONF/cert.pem" ]; then
-  openssl req -x509 -newkey rsa:4096 -nodes -days 3650 \
+  run "Generating certificate" openssl req -x509 -newkey rsa:4096 -nodes -days 3650 \
     -keyout "$CONF/key.pem" -out "$CONF/cert.pem" -subj "/CN=rclone" \
     -addext "subjectAltName=DNS:$fqdn"
   chmod 600 "$CONF/key.pem"
@@ -116,15 +122,24 @@ Restart=on-failure
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-systemctl enable --now rclone-s3
+run "Starting rclone" systemctl enable --now rclone-s3
 sleep 2
 systemctl is-active --quiet rclone-s3 || { journalctl -u rclone-s3 -n 20 --no-pager >&2; exit 1; }
 
 # shellcheck disable=SC1091
 . "$CONF/env"
-finish "Endpoint:    $fqdn:$PORT
+creds=$HOME/endpoint-s3.creds
+(
+  umask 077
+  cat > "$creds" <<EOF
+Endpoint:    $fqdn:$PORT
 Bucket:      $BUCKET
 Access key:  $ACCESS_KEY
 Secret key:  $SECRET_KEY
-Fingerprint: $(openssl x509 -in "$CONF/cert.pem" -noout -fingerprint -sha256)
+Fingerprint: $(openssl x509 -in "$CONF/cert.pem" -noout -fingerprint -sha256 | cut -d= -f2)
+EOF
+)
+msg "S3 endpoint details:
+
+$(cat "$creds")
 Next: disable key expiry for this node, tag it with tag:shared, and share it with the other person."
