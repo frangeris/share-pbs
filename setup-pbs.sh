@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Configure the PBS LXC: disable the enterprise repository and install Tailscale.
+# Configure the PBS LXC: disable the enterprise repository, install Tailscale and sign in.
 # Run as root inside the LXC.
 set -euo pipefail
 
@@ -45,4 +45,7 @@ run 50 "Installing Tailscale" bash -o pipefail -c 'curl -fsSL https://tailscale.
 run 90 "Starting Tailscale" systemctl enable --now tailscaled
 gauge_stop
 
-finish "Next: run tailscale up, then disable key expiry for this node in the Tailscale admin console. Do not tag this node."
+# tailscale up prints a login link and waits for the sign-in. It needs the terminal, not the gauge.
+tailscale ip -4 >/dev/null 2>&1 || tailscale up
+
+finish "Next: disable key expiry for this node in the Tailscale admin console. Do not tag this node."
