@@ -2,46 +2,50 @@
 
 ![Alice and Bob swap encrypted backups through a direct tunnel](assets/hero.svg)
 
+> _Store your encrypted backups with a friend. Your friend stores their encrypted backups with you._
+
 Swap encrypted Proxmox Backup Server (PBS) backups with friends. Each person offers S3 storage to the other. Nobody gets access to the PBS server of the other.
 
 Each person runs two LXC containers: a PBS server and an rclone server. The rclone server shows a folder as S3 storage, and the PBS server of your friend writes its backups there. Tailscale connects the nodes. The backup data goes directly between them in an encrypted tunnel.
 
 In your PBS, make one S3 datastore for each friend that stores your backups. Two friends give you two offsite copies.
 
-## Requirements (should be already installed before start)
+## ✔ Requirements before start
 
-- Proxmox Backup Server 4.2 or later.
-- rclone, the version must have the command `rclone serve s3`.
-- Tailscale account (you and the person that will save your encrypted backups)
+Make sure you have the following (proxmox and rclone LXC containers) installed and a Tailscale account:
 
-> This guide only configures PBS and rclone assuming that are LXC. It does not install them, you need to do it before hand.
+- [Proxmox Backup Server](https://community-scripts.org/scripts/proxmox-backup-server) 4.2 or later.
+- [rclone](https://community-scripts.org/scripts/rclone), the version must have the command `rclone serve s3`.
+- [Tailscale](https://tailscale.com/download/linux) account
 
-## On your Proxmox host (assuming PBS / rclone are LXC)
+> This guide only helps you to configure PBS and rclone assuming that are LXC. It does not install them, you need to do it before hand ⤴.
+
+## 1. Start on your Proxmox host (assuming PBS / rclone are LXC)
 
 As a container shares the kernel of the host. Only the host can give it `/dev/net/tun`.
 
-1. Make sure the host has the device
+_Make sure the host has the device_
 
 ```
 ls -l /dev/net/tun || modprobe tun
 ```
 
-2. Add these lines at the end of `/etc/pve/lxc/<CTID>.conf`:
+_Add these lines at the end of `/etc/pve/lxc/<CTID>.conf`_
 
 ```
 lxc.cgroup2.devices.allow: c 10:200 rwm
 lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
 ```
 
-3. Reboot the LXC: `pct reboot <CTID>`.
+_Reboot the LXC: `pct reboot <CTID>`_
 
-## Then, on PBS run:
+## 2. Then, on PBS:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main/setup-pbs.sh)"
 ```
 
-## On rclone LXC:
+## 3. Finally on rclone:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main/setup-rclone.sh)"
@@ -49,7 +53,8 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main
 
 > Set a quota on the folder for your friend. Without a quota, your friend can fill your storage.
 
-## Manual install (steps)
+<details>
+<summary><strong>Prefer doing a manual install? ↓</strong></summary>
 
 Same steps as the script, by hand.
 
@@ -247,6 +252,8 @@ CAUTION: SAVE THE ENCRYPTION KEY IN A SAFE PLACE. IF YOU LOSE THE KEY, YOU CANNO
 3. Do a test restore to a new ID. Do not restore over the original.
 4. Do a test restore each week.
 
+</details>
+
 ## Access
 
 - The PBS web interface is at `https://<ip>:8007`.
@@ -265,4 +272,3 @@ If your PBS server is lost, make a new PBS server. Create the datastore again wi
 - The host cannot force the client to encrypt.
 - rclone has no permissions for each bucket. Run one rclone instance for each friend.
 - Each PBS cache needs 64 to 128 GiB.
-
