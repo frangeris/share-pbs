@@ -16,13 +16,22 @@ export DEBIAN_FRONTEND=noninteractive
 # whiptail leaves the dialog on the screen: clear it and keep the exit status.
 wt() { local rc=0; whiptail --title "$TITLE" "$@" || rc=$?; clear; return "$rc"; }
 msg() { wt --msgbox "$1" 0 0; }
-die() { msg "$1"; exit 1; }
+die() { gauge_stop; msg "$1"; exit 1; }
 # whiptail draws on stdout and writes the answer to stderr: swap them to catch the answer.
 ask() { wt --inputbox "$1" 10 70 "$2" 3>&1 1>&2 2>&3; }
-# Run a command with its output in $LOG and a loading dialog on the screen.
+# Loading bar: one whiptail --gauge stays open on fd 4 while the steps run.
+gauge_stop() {
+  exec 4>&-
+  [ -z "${GAUGE_PID:-}" ] || { wait "$GAUGE_PID" 2>/dev/null || true; GAUGE_PID=; }
+}
+# Run a step with its output in $LOG. The dialog shows the percent and the text.
 run() {
-  local text=$1; shift
-  whiptail --title "$TITLE" --infobox "$text..." 0 0
+  local pct=$1 text=$2; shift 2
+  if [ -z "${GAUGE_PID:-}" ]; then
+    exec 4> >(whiptail --title "$TITLE" --gauge "" 7 64 0)
+    GAUGE_PID=$!
+  fi
+  printf 'XXX\n%s\n%s...\nXXX\n' "$pct" "$text" >&4
   "$@" </dev/null >>"$LOG" 2>&1 || die "$text did not complete. Last lines of $LOG:
 
 $(tail -n 8 "$LOG")"
@@ -63,8 +72,8 @@ Continue?" 13 70 || exit 1
 fi
 
 : >"$LOG"
-run "Updating package lists" apt-get update
-run "Installing jq, openssl and nftables" apt-get install -y jq openssl nftables
+run 10 "Updating package lists" apt-get update
+run 35 "Installing jq, openssl and nftables" apt-get install -y jq openssl nftables
 
 mkdir -p "$DATA_DIR/$BUCKET" "$CONF"
 fqdn=$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')
@@ -83,7 +92,7 @@ EOF
 fi
 
 if [ ! -f "$CONF/cert.pem" ]; then
-  run "Generating certificate" openssl req -x509 -newkey rsa:4096 -nodes -days 3650 \
+  run 60 "Generating certificate" openssl req -x509 -newkey rsa:4096 -nodes -days 3650 \
     -keyout "$CONF/key.pem" -out "$CONF/cert.pem" -subj "/CN=rclone" \
     -addext "subjectAltName=DNS:$fqdn"
   chmod 600 "$CONF/key.pem"
@@ -122,9 +131,10 @@ Restart=on-failure
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-run "Starting rclone" systemctl enable --now rclone-s3
+run 85 "Starting rclone" systemctl enable --now rclone-s3
 sleep 2
-systemctl is-active --quiet rclone-s3 || { journalctl -u rclone-s3 -n 20 --no-pager >&2; exit 1; }
+systemctl is-active --quiet rclone-s3 || { gauge_stop; journalctl -u rclone-s3 -n 20 --no-pager >&2; exit 1; }
+gauge_stop
 
 # shellcheck disable=SC1091
 . "$CONF/env"
