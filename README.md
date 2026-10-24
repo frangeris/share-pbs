@@ -30,14 +30,21 @@ _Make sure the host has the device_
 ls -l /dev/net/tun || modprobe tun
 ```
 
-_Add these lines at the end of `/etc/pve/lxc/<CTID>.conf`_
+_Add the device to **both** LXC containers, PBS and rclone, and reboot them. Set `PBS_CTID` and `RCLONE_CTID` to the container IDs_
 
-```
-lxc.cgroup2.devices.allow: c 10:200 rwm
-lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+```bash
+PBS_CTID=123 RCLONE_CTID=123
 ```
 
-_Reboot the LXC: `pct reboot <CTID>`_
+```bash
+for id in $PBS_CTID $RCLONE_CTID; do \
+  grep -q net/tun /etc/pve/lxc/$id.conf || printf "%s\n" \
+    "lxc.cgroup2.devices.allow: c 10:200 rwm" \
+    "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file" \
+    >> /etc/pve/lxc/$id.conf; \
+  pct reboot $id; \
+done
+```
 
 ## 2. Then, on PBS:
 
