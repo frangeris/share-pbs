@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" role="img" aria-labelledby="t d">
-  <title id="t">Proxmox Backup Server Share</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 70 1200 350" role="img" aria-labelledby="t d">
+  <title id="t">Share Proxmox Backup Server</title>
   <desc id="d">Alice and Bob each run PVE, PBS and rclone. The PBS of each person sends encrypted backups directly to a folder on the rclone server of the other person. Tailscale only helps the nodes find each other and carries no backup data.</desc>
   <style>
     text{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
@@ -39,8 +39,7 @@
     <g id="pkt"><circle r="9" fill="currentColor" filter="url(#glow)"/><circle r="4.5" fill="currentColor"/></g>
   </defs>
 
-  <rect width="1200" height="420" rx="24" fill="url(#bg)"/>
-  <text x="600" y="62" text-anchor="middle" font-size="32" font-weight="700" fill="#fff">Proxmox Backup Server Share</text>
+  <rect y="70" width="1200" height="350" rx="24" fill="url(#bg)"/>
 
   <!-- Panels -->
   <rect x="40" y="100" width="400" height="296" rx="20" fill="#080808" stroke="#fff" stroke-opacity=".14"/>
