@@ -87,12 +87,12 @@ Do not tag this node. Do not use `--accept-routes`.
 
 ### 2. rclone LXC
 
-In the rclone LXC, as `root`. The commands use the folder `/srv/s3`, the bucket `pbs`, and the port `8443`. To use other values, replace them in all commands.
+In the rclone LXC, as `root`. The commands use the folder `/srv/backups-s3`, the bucket `pbs`, and the port `8443`. To use other values, replace them in all commands.
 
 1. Check that the folder is a mount point. If it is not, rclone writes to the disk of the LXC.
 
    ```bash
-   mountpoint /srv/s3
+   mountpoint /srv/backups-s3
    ```
 
 2. Install the packages and join Tailscale:
@@ -108,7 +108,7 @@ In the rclone LXC, as `root`. The commands use the folder `/srv/s3`, the bucket 
 3. Make the folders and read the Tailscale name of the node:
 
    ```bash
-   mkdir -p /srv/s3/pbs /etc/rclone-s3
+   mkdir -p /srv/backups-s3/pbs /etc/rclone-s3
    fqdn=$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')
    ```
 
@@ -117,7 +117,7 @@ In the rclone LXC, as `root`. The commands use the folder `/srv/s3`, the bucket 
    ```bash
    install -m 600 /dev/null /etc/rclone-s3/env
    cat > /etc/rclone-s3/env <<EOF
-   DATA_DIR=/srv/s3
+   DATA_DIR=/srv/backups-s3
    PORT=8443
    ACCESS_KEY=$(openssl rand -hex 12)
    SECRET_KEY=$(openssl rand -hex 24)
