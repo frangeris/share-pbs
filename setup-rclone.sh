@@ -62,7 +62,7 @@ PORT=$(ask "HTTPS port" "${PORT:-8443}")
 if ! mountpoint -q "$DATA_DIR"; then
   wt --defaultno --yesno "Warning!
 
-$DATA_DIR is a simple folder in this container, not a mounted disk.
+$DATA_DIR is a simple folder in this container, not a mounted folder.
 
 rclone saves the backups on the disk of this LXC. If this disk is full, the LXC stops.
 
