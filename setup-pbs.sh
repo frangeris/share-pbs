@@ -3,7 +3,7 @@
 # Run as root inside the LXC.
 set -euo pipefail
 
-TITLE="PBS Share"
+TITLE="Share PBS"
 
 msg() { whiptail --title "$TITLE" --msgbox "$1" 0 0; }
 die() { msg "$1"; exit 1; }

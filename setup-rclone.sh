@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Configure the rclone LXC: join Tailscale and serve a folder as S3 over HTTPS.
 # Run as root inside the LXC. Dialogs ask for DATA_DIR, the folder for the backups
-# of your friend (/srv/s3), BUCKET (pbs) and PORT (8443).
+# (/srv/s3), BUCKET (pbs) and PORT (8443).
 # A variable in the environment changes the value that a dialog shows. ACCESS_KEY
 # and SECRET_KEY have no dialog: set them in the environment, or the script makes
 # random values.
 set -euo pipefail
 
 CONF=/etc/rclone-s3
-TITLE="PBS Share"
+TITLE="Share PBS"
 
 msg() { whiptail --title "$TITLE" --msgbox "$1" 0 0; }
 die() { msg "$1"; exit 1; }
@@ -33,7 +33,7 @@ if [ -f "$CONF/env" ]; then
   . "$CONF/env"
   BUCKET=${BUCKET:-pbs}
 else
-  DATA_DIR=$(ask "Folder for the backups of your friend" "${DATA_DIR:-/srv/s3}")
+  DATA_DIR=$(ask "Folder for the backups" "${DATA_DIR:-/srv/s3}")
   BUCKET=$(ask "Bucket name" "${BUCKET:-pbs}")
   PORT=$(ask "HTTPS port" "${PORT:-8443}")
 fi
@@ -43,9 +43,11 @@ fi
 # Without a mount, rclone writes to the disk of the LXC and can fill it.
 if ! mountpoint -q "$DATA_DIR"; then
   whiptail --title "$TITLE" --defaultno --yesno "$DATA_DIR is not a mount point.
-rclone will store the backups of your friend on the disk of this LXC. A full disk stops the LXC.
 
-Continue?" 12 70 || exit 1
+rclone will write the backups to the disk of this LXC. A full disk stops the LXC.
+Mount a folder at $DATA_DIR instead.
+
+Continue?" 13 70 || exit 1
 fi
 
 apt-get update
@@ -125,4 +127,4 @@ Bucket:      $BUCKET
 Access key:  $ACCESS_KEY
 Secret key:  $SECRET_KEY
 Fingerprint: $(openssl x509 -in "$CONF/cert.pem" -noout -fingerprint -sha256)
-Next: disable key expiry for this node, tag it with tag:shared, and share it with your friend."
+Next: disable key expiry for this node, tag it with tag:shared, and share it with the other person."

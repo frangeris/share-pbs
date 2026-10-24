@@ -1,4 +1,4 @@
-# Proxmox Backup Server Share
+# Share PBS
 
 ![Alice and Bob swap encrypted backups through a direct tunnel](assets/hero.svg)
 
