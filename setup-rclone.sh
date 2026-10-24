@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Configure the rclone LXC: serve a folder as S3 over HTTPS. Tailscale must be ready first.
+# Configure the rclone LXC: install Tailscale and serve a folder as S3 over HTTPS.
 # Run as root inside the LXC. Dialogs ask for DATA_DIR, the folder for the backups
 # (/srv/s3), BUCKET (pbs) and PORT (8443).
 # A variable in the environment changes the value that a dialog shows. ACCESS_KEY
@@ -39,7 +39,6 @@ $(tail -n 8 "$LOG")"
 
 [ "$(id -u)" -eq 0 ] || die "Run this script as root."
 [ -c /dev/net/tun ] || die "/dev/net/tun is missing. Pass it to this LXC from the Proxmox host."
-tailscale ip -4 >/dev/null 2>&1 || die "Tailscale is not ready. Install it and run tailscale up, then start this script again."
 RCLONE=
 # /opt/rclone/rclone is where the Proxmox community script installs it, outside of PATH.
 for p in "$(command -v rclone || true)" /usr/local/bin/rclone /usr/bin/rclone /opt/rclone/rclone; do
@@ -71,7 +70,12 @@ fi
 
 : >"$LOG"
 run 10 "Updating package lists" apt-get update
-run 35 "Installing jq, openssl and nftables" apt-get install -y jq openssl nftables
+run 25 "Installing curl, jq, openssl and nftables" apt-get install -y curl jq openssl nftables
+command -v tailscale >/dev/null || run 40 "Installing Tailscale" bash -o pipefail -c 'curl -fsSL https://tailscale.com/install.sh | sh'
+run 50 "Starting Tailscale" systemctl enable --now tailscaled
+gauge_stop
+# tailscale up prints a login link and waits for the sign-in. It needs the terminal, not the gauge.
+tailscale ip -4 >/dev/null 2>&1 || tailscale up
 
 mkdir -p "$DATA_DIR/$BUCKET" "$CONF"
 fqdn=$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')
