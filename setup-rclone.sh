@@ -3,8 +3,8 @@
 # Run as root inside the LXC. Dialogs ask for DATA_DIR, the folder for the backups
 # (/srv/s3), BUCKET (pbs) and PORT (8443).
 # A variable in the environment changes the value that a dialog shows. ACCESS_KEY
-# and SECRET_KEY have no dialog: set them in the environment, or the script makes
-# random values.
+# and SECRET_KEY have no dialog: set them in the environment, or the script keeps
+# the values of an earlier run, or makes random values.
 set -euo pipefail
 
 CONF=/etc/rclone-s3
@@ -48,16 +48,14 @@ done
 [ -n "$RCLONE" ] || die "rclone is not installed. Install it in this LXC first."
 "$RCLONE" serve s3 --help >/dev/null 2>&1 || die "This rclone is too old for serve s3. Install a newer version."
 
+# The values of an earlier run are the defaults of the dialogs and the keys stay the same.
+# A variable in the environment wins.
 if [ -f "$CONF/env" ]; then
-  # Second start: keep the stored settings.
-  # shellcheck disable=SC1091
-  . "$CONF/env"
-  BUCKET=${BUCKET:-pbs}
-else
-  DATA_DIR=$(ask "Folder for the backups" "${DATA_DIR:-/srv/s3}")
-  BUCKET=$(ask "Bucket name" "${BUCKET:-pbs}")
-  PORT=$(ask "HTTPS port" "${PORT:-8443}")
+  while IFS== read -r k v; do [ -n "${!k:-}" ] || printf -v "$k" %s "$v"; done < "$CONF/env"
 fi
+DATA_DIR=$(ask "Folder for the backups" "${DATA_DIR:-/srv/s3}")
+BUCKET=$(ask "Bucket name" "${BUCKET:-pbs}")
+PORT=$(ask "HTTPS port" "${PORT:-8443}")
 
 [ -n "$BUCKET" ] || die "The bucket name is empty."
 [[ $PORT =~ ^[0-9]+$ ]] || die "The port must be a number."
@@ -79,17 +77,16 @@ mkdir -p "$DATA_DIR/$BUCKET" "$CONF"
 fqdn=$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')
 
 # shortcut: the keys appear in the rclone command line, fine for a single-purpose LXC.
-if [ ! -f "$CONF/env" ]; then
-  (
-    umask 077
-    cat > "$CONF/env" <<EOF
+(
+  umask 077
+  cat > "$CONF/env" <<EOF
 DATA_DIR=$DATA_DIR
+BUCKET=$BUCKET
 PORT=$PORT
 ACCESS_KEY=${ACCESS_KEY:-$(openssl rand -hex 12)}
 SECRET_KEY=${SECRET_KEY:-$(openssl rand -hex 24)}
 EOF
-  )
-fi
+)
 
 if [ ! -f "$CONF/cert.pem" ]; then
   run 60 "Generating certificate" openssl req -x509 -newkey rsa:4096 -nodes -days 3650 \
@@ -131,7 +128,7 @@ Restart=on-failure
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-run 85 "Starting rclone" systemctl enable --now rclone-s3
+run 85 "Starting rclone" bash -c 'systemctl enable rclone-s3 && systemctl restart rclone-s3'
 sleep 2
 systemctl is-active --quiet rclone-s3 || { gauge_stop; journalctl -u rclone-s3 -n 20 --no-pager >&2; exit 1; }
 gauge_stop
@@ -152,4 +149,5 @@ EOF
 msg "S3 endpoint details:
 
 $(cat "$creds")
-Next: disable key expiry for this node, tag it with tag:shared, and share it with the other person."
+
+Saved in ~/endpoint-s3.creds"
