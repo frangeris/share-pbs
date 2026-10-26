@@ -22,7 +22,7 @@ gauge_stop() {
 run() {
   local pct=$1 text=$2; shift 2
   if [ -z "${GAUGE_PID:-}" ]; then
-    exec 4> >(whiptail --title "$TITLE" --gauge "" 7 64 0)
+    exec 4> >(whiptail --title "$TITLE" --gauge "Starting..." 7 64 0)
     GAUGE_PID=$!
   fi
   printf 'XXX\n%s\n%s...\nXXX\n' "$pct" "$text" >&4
