@@ -39,8 +39,8 @@ $(tail -n 8 "$LOG")"
 [ "$(id -u)" -eq 0 ] || die "Run this script as root."
 [ -c /dev/net/tun ] || die "/dev/net/tun is missing. Pass it to this LXC from the Proxmox host."
 
-LOCAL_DIR=$(ask "Enter the folder for your backups" "${LOCAL_DIR:-/mnt/local}")
-INCOMING_DIR=$(ask "Enter the folder for incoming backups" "${INCOMING_DIR:-/mnt/incoming}")
+LOCAL_DIR=$(ask "Enter the folder for your backups" "${LOCAL_DIR:-$HOME/backups/mine}")
+INCOMING_DIR=$(ask "Enter the folder for incoming backups" "${INCOMING_DIR:-$HOME/backups/theirs}")
 for d in "$LOCAL_DIR" "$INCOMING_DIR"; do
   [[ $d == /* ]] || die "\"$d\" is not a full path."
   mkdir -p "$d" || die "Cannot make the folder $d."

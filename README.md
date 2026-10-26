@@ -48,7 +48,7 @@ pct reboot $PBS_CTID
 ## 2️⃣ On PBS:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main/setup-pbs.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main/setup.sh)"
 ```
 
 The script asks for two folders: one for your backups and one for the backups of your friend. Enter a mounted folder or a folder in the container. If a folder does not exist, the script makes it.
