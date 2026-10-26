@@ -52,7 +52,8 @@ done
 if [ -f "$CONF/env" ]; then
   while IFS== read -r k v; do [ -n "${!k:-}" ] || printf -v "$k" %s "$v"; done < "$CONF/env"
 fi
-DATA_DIR=$(ask "Folder for the backups" "${DATA_DIR:-}")
+DATA_DIR=$(ask "Enter the folder for backups
+(must be a mounted disk, not the storage of this container)" "${DATA_DIR:-}")
 [ -n "$DATA_DIR" ] || die "The folder is empty."
 # Without a mount, rclone writes to the disk of the LXC and can fill it.
 if ! mountpoint -q "$DATA_DIR"; then
