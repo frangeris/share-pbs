@@ -16,25 +16,17 @@ export DEBIAN_FRONTEND=noninteractive
 # whiptail leaves the dialog on the screen: clear it and keep the exit status.
 wt() { local rc=0; whiptail --title "$TITLE" "$@" || rc=$?; clear; return "$rc"; }
 msg() { wt --msgbox "$1" 0 0; }
-die() { gauge_stop; msg "$1"; exit 1; }
+die() { msg "$1"; exit 1; }
 # whiptail draws on stdout and writes the answer to stderr: swap them to catch the answer.
 ask() { wt --inputbox "$1" 10 70 "$2" 3>&1 1>&2 2>&3; }
-# Loading bar: one whiptail --gauge stays open on fd 4 while the steps run.
-gauge_stop() {
-  exec 4>&-
-  [ -z "${GAUGE_PID:-}" ] || { wait "$GAUGE_PID" 2>/dev/null || true; GAUGE_PID=; }
-}
-# Run a step with its output in $LOG. The dialog shows the percent and the text.
+# Run a step with its output in $LOG. The console shows the step, then a check mark.
 run() {
-  local pct=$1 text=$2; shift 2
-  if [ -z "${GAUGE_PID:-}" ]; then
-    exec 4> >(whiptail --title "$TITLE" --gauge "Starting..." 7 64 0)
-    GAUGE_PID=$!
-  fi
-  printf 'XXX\n%s\n%s...\nXXX\n' "$pct" "$text" >&4
-  "$@" </dev/null >>"$LOG" 2>&1 || die "$text did not complete. Last lines of $LOG:
+  local text=$1; shift
+  printf '⏳ %s...' "$text"
+  "$@" </dev/null >>"$LOG" 2>&1 || { echo; die "$text did not complete. Last lines of $LOG:
 
-$(tail -n 8 "$LOG")"
+$(tail -n 8 "$LOG")"; }
+  printf '\r\033[2K✔ %s\n' "$text"
 }
 
 [ "$(id -u)" -eq 0 ] || die "Run this script as root."
@@ -71,12 +63,11 @@ You must mount a folder at $DATA_DIR and try again."
 fi
 
 : >"$LOG"
-run 10 "Updating package lists" apt-get update
-run 25 "Installing curl, jq, openssl and nftables" apt-get install -y curl jq openssl nftables
-command -v tailscale >/dev/null || run 40 "Installing Tailscale" bash -o pipefail -c 'curl -fsSL https://tailscale.com/install.sh | sh'
-run 50 "Starting Tailscale" systemctl enable --now tailscaled
-gauge_stop
-# tailscale up prints a login link and waits for the sign-in. It needs the terminal, not the gauge.
+run "Updating package lists" apt-get update
+run "Installing curl, jq, openssl and nftables" apt-get install -y curl jq openssl nftables
+command -v tailscale >/dev/null || run "Installing Tailscale" bash -o pipefail -c 'curl -fsSL https://tailscale.com/install.sh | sh'
+run "Starting Tailscale" systemctl enable --now tailscaled
+# tailscale up prints a login link and waits for the sign-in.
 tailscale ip -4 >/dev/null 2>&1 || tailscale up
 
 mkdir -p "$DATA_DIR/$BUCKET" "$CONF"
@@ -95,7 +86,7 @@ EOF
 )
 
 if [ ! -f "$CONF/cert.pem" ]; then
-  run 60 "Generating certificate" openssl req -x509 -newkey rsa:4096 -nodes -days 3650 \
+  run "Generating certificate" openssl req -x509 -newkey rsa:4096 -nodes -days 3650 \
     -keyout "$CONF/key.pem" -out "$CONF/cert.pem" -subj "/CN=rclone" \
     -addext "subjectAltName=DNS:$fqdn"
   chmod 600 "$CONF/key.pem"
@@ -134,10 +125,9 @@ Restart=on-failure
 WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
-run 85 "Starting rclone" bash -c 'systemctl enable rclone-s3 && systemctl restart rclone-s3'
+run "Starting rclone" bash -c 'systemctl enable rclone-s3 && systemctl restart rclone-s3'
 sleep 2
-systemctl is-active --quiet rclone-s3 || { gauge_stop; journalctl -u rclone-s3 -n 20 --no-pager >&2; exit 1; }
-gauge_stop
+systemctl is-active --quiet rclone-s3 || { journalctl -u rclone-s3 -n 20 --no-pager >&2; exit 1; }
 
 # shellcheck disable=SC1091
 . "$CONF/env"
