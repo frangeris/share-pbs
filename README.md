@@ -74,7 +74,7 @@ Go to **Access controls** and open the JSON editor. Delete the allow-all grant `
 ],
 ```
 
-Replace the placeholders with your Tailscale email and the Tailscale IP of the PBS node.
+The script prints these entries with your values. If you did a manual install, replace the placeholders with your Tailscale email and the Tailscale IP of the PBS node.
 
 > [!IMPORTANT]
 > Do not tag the PBS node. A tagged node cannot connect to the node that your friend shares with you.

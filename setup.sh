@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Configure the PBS LXC: make the datastore folders, disable the enterprise repository,
-# install Tailscale and sign in. Run as root inside the LXC.
+# install Tailscale, sign in and print the access control entries. Run as root inside the LXC.
 # Dialogs ask for LOCAL_DIR and INCOMING_DIR. A variable in the environment changes
 # the value that a dialog shows.
 set -euo pipefail
@@ -39,8 +39,11 @@ $(tail -n 8 "$LOG")"
 [ "$(id -u)" -eq 0 ] || die "Run this script as root."
 [ -c /dev/net/tun ] || die "/dev/net/tun is missing. Pass it to this LXC from the Proxmox host."
 
-LOCAL_DIR=$(ask "Enter the folder for your backups" "${LOCAL_DIR:-$HOME/backups/mine}")
-INCOMING_DIR=$(ask "Enter the folder for incoming backups" "${INCOMING_DIR:-$HOME/backups/theirs}")
+LOCAL_DIR=$(ask "Enter the folder for your backups" "${LOCAL_DIR:-~/backups/my}")
+INCOMING_DIR=$(ask "Enter the folder for incoming backups" "${INCOMING_DIR:-~/backups/your-friend}")
+# whiptail does not expand ~: replace it with the home folder.
+LOCAL_DIR=${LOCAL_DIR/#\~\//$HOME/}
+INCOMING_DIR=${INCOMING_DIR/#\~\//$HOME/}
 for d in "$LOCAL_DIR" "$INCOMING_DIR"; do
   [[ $d == /* ]] || die "\"$d\" is not a full path."
   mkdir -p "$d" || die "Cannot make the folder $d."
@@ -52,12 +55,29 @@ enterprise=/etc/apt/sources.list.d/pbs-enterprise.sources
 
 : >"$LOG"
 run 10 "Updating package lists" apt-get update
-command -v curl >/dev/null || run 30 "Installing curl" apt-get install -y curl
+run 30 "Installing curl and jq" apt-get install -y curl jq
 run 50 "Installing Tailscale" bash -o pipefail -c 'curl -fsSL https://tailscale.com/install.sh | sh'
 run 90 "Starting Tailscale" systemctl enable --now tailscaled
 gauge_stop
 
 # tailscale up prints a login link and waits for the sign-in. It needs the terminal, not the gauge.
 tailscale ip -4 >/dev/null 2>&1 || tailscale up
+ip=$(tailscale ip -4)
+email=$(tailscale status --json | jq -r '.User[(.Self.UserID | tostring)].LoginName')
 
 finish "Next: disable key expiry for this node in the Tailscale admin console. Do not tag this node."
+
+cat <<EOF
+
+Add these entries in the Tailscale admin console, Access controls, JSON editor:
+
+"grants": [
+    ...
+    {"src": ["autogroup:shared"], "dst": ["$ip"], "ip": ["8007"]},
+],
+
+"tests": [
+    ...
+    {"src": "$email", "accept": ["$ip:8007"]},
+],
+EOF
