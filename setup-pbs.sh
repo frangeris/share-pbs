@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Configure the PBS LXC: disable the enterprise repository, install Tailscale and sign in.
-# Run as root inside the LXC.
+# Configure the PBS LXC: make the datastore folders, disable the enterprise repository,
+# install Tailscale and sign in. Run as root inside the LXC.
+# Dialogs ask for LOCAL_DIR and INCOMING_DIR. A variable in the environment changes
+# the value that a dialog shows.
 set -euo pipefail
 
 TITLE="Share PBS"
@@ -8,9 +10,12 @@ LOG=/var/log/share-pbs.log
 # The output is hidden: an apt prompt would wait for an answer that nobody can see.
 export DEBIAN_FRONTEND=noninteractive
 
-# whiptail leaves the dialog on the screen: clear it.
-msg() { whiptail --title "$TITLE" --msgbox "$1" 0 0; clear; }
+# whiptail leaves the dialog on the screen: clear it and keep the exit status.
+wt() { local rc=0; whiptail --title "$TITLE" "$@" || rc=$?; clear; return "$rc"; }
+msg() { wt --msgbox "$1" 0 0; }
 die() { gauge_stop; msg "$1"; exit 1; }
+# whiptail draws on stdout and writes the answer to stderr: swap them to catch the answer.
+ask() { wt --inputbox "$1" 10 70 "$2" 3>&1 1>&2 2>&3; }
 # Print the text after the dialog: a closed dialog leaves nothing in the terminal to copy.
 finish() { msg "$1"; echo "$1"; }
 # Loading bar: one whiptail --gauge stays open on fd 4 while the steps run.
@@ -33,6 +38,13 @@ $(tail -n 8 "$LOG")"
 
 [ "$(id -u)" -eq 0 ] || die "Run this script as root."
 [ -c /dev/net/tun ] || die "/dev/net/tun is missing. Pass it to this LXC from the Proxmox host."
+
+LOCAL_DIR=$(ask "Enter the folder for your backups" "${LOCAL_DIR:-/mnt/local}")
+INCOMING_DIR=$(ask "Enter the folder for incoming backups" "${INCOMING_DIR:-/mnt/incoming}")
+for d in "$LOCAL_DIR" "$INCOMING_DIR"; do
+  [[ $d == /* ]] || die "\"$d\" is not a full path."
+  mkdir -p "$d" || die "Cannot make the folder $d."
+done
 
 # Without a subscription the enterprise repository returns 401 and apt-get update fails.
 enterprise=/etc/apt/sources.list.d/pbs-enterprise.sources
