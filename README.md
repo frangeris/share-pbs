@@ -20,9 +20,7 @@ Make sure you have the following (proxmox and rclone LXC containers) installed a
 
 > This guide only helps you to configure PBS and rclone assuming that are LXC. It does not install them, you need to do it before hand ⤴.
 
-> Tailscale must be installed on both LXC containers before you start.
-
-## 1. Start on your Proxmox host (assuming PBS / rclone are LXC)
+## 1️⃣ Start on your Proxmox host (assuming PBS / rclone are LXC)
 
 As a container shares the kernel of the host. Only the host can give it `/dev/net/tun`.
 
@@ -35,7 +33,7 @@ ls -l /dev/net/tun || modprobe tun
 _Add the device to **both** LXC containers, PBS and rclone, and reboot them. Set `PBS_CTID` and `RCLONE_CTID` to the container IDs_
 
 ```bash
-PBS_CTID=123 RCLONE_CTID=123
+PBS_CTID=<id of pbs> RCLONE_CTID=<id of rclone>
 ```
 
 ```bash
@@ -48,31 +46,30 @@ for id in $PBS_CTID $RCLONE_CTID; do \
 done
 ```
 
-## 2. Then, on PBS:
+rclone saves the backups in a folder. If the folder is not a mount point, the backups go to the system disk of the LXC. When this disk is full, the LXC stops.
+
+A mount point gives the folder its own storage. List the disks of the host and find the mount path of your disk:
+
+```bash
+df -h
+```
+
+> [!WARNING]
+> Do not copy the next command as it is. Replace `<path to disk>` with the mount path of your disk.
+
+Add the mount point and reboot the rclone LXC:
+
+```bash
+pct set $RCLONE_CTID -mp0 <path to disk>,mp=/mnt/backups-s3 && pct reboot $RCLONE_CTID
+```
+
+## 2️⃣ Then, on PBS:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main/setup-pbs.sh)"
 ```
 
-## 3. Mount the backup storage on the rclone LXC
-
-rclone saves the backups in a folder. If the folder is not a mount point, the backups go to the system disk of the LXC. When this disk is full, the LXC stops.
-
-A mount point gives the folder its own storage. Set the container ID, the Proxmox storage, and the size in GiB:
-
-```bash
-RCLONE_CTID=123 STORAGE=local-lvm SIZE=500
-```
-
-Add the mount point and reboot the rclone LXC:
-
-```bash
-pct set $RCLONE_CTID -mp0 $STORAGE:$SIZE,mp=/srv/backups-s3 && pct reboot $RCLONE_CTID
-```
-
-The size is also the limit for the backups. To use the web interface, select the LXC, then **Resources**, **Add**, **Mount Point**.
-
-## 4. Finally on rclone:
+## 3️⃣ Finally on rclone:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main/setup-rclone.sh)"
