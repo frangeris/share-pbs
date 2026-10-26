@@ -152,7 +152,7 @@ gauge_stop
 
 # shellcheck disable=SC1091
 . "$CONF/env"
-creds=$HOME/endpoint-s3.creds
+creds=$HOME/s3.creds
 (
   umask 077
   cat > "$creds" <<EOF
@@ -167,4 +167,4 @@ msg "S3 endpoint details:
 
 $(cat "$creds")
 
-Saved in ~/endpoint-s3.creds"
+Saved in ~/s3.creds"
