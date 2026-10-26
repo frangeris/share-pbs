@@ -63,19 +63,51 @@ Add the mount point and reboot the rclone LXC:
 pct set $RCLONE_CTID -mp0 <path to disk>,mp=/mnt/backups-s3 && pct reboot $RCLONE_CTID
 ```
 
-## 2️⃣ Then, on PBS:
+## 2️⃣ On PBS:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main/setup-pbs.sh)"
 ```
 
-## 3️⃣ Finally on rclone:
+## 3️⃣ On rclone:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main/setup-rclone.sh)"
 ```
 
-> Set a quota on the folder for your friend. Without a quota, your friend can fill your storage.
+## 4️⃣ Finally permissions (Tailscale)
+
+> [!CAUTION]
+> Disable key expiry on both nodes. If a key expires, the backups stop.
+
+In the Tailscale admin console, go to **Machines** and disable key expiry on the PBS node and on the rclone node.
+
+Go to **Access controls** and open the JSON editor. Delete the allow-all grant `{"src": ["*"], "dst": ["*"], "ip": ["*"]}` and add these entries:
+
+```json
+"tagOwners": {
+    ...
+    "tag:share-pbs": ["autogroup:admin"],
+},
+
+"grants": [
+    ...
+    {"src": ["autogroup:shared"], "dst": ["tag:share-pbs"], "ip": ["8443"]},
+],
+
+"tests": [
+    ...
+    {"src": "<your email>", "accept": ["<replace pbs ip>:8007", "<replace rclone ip>:8443"]},
+    {"src": "tag:share-pbs", "deny": ["<replace pbs ip>:8007"]},
+],
+```
+
+Replace the placeholders with your Tailscale email and the Tailscale IPs of the PBS node and the rclone node.
+
+> [!IMPORTANT]
+> Go back to **Machines** and apply the tag `share-pbs` to **the rclone node only**.
+>
+> Then share the rclone node with your friend and accept the rclone node that your friend shares with you.
 
 <details>
 <summary><h2>Prefer doing a manual install? ↓</h2></summary>
@@ -215,23 +247,23 @@ If you change the port, use it in the access rules in step 3.
 
    ```json
    "tagOwners": {
-       "tag:shared": ["autogroup:admin"],
+       "tag:share-pbs": ["autogroup:admin"],
    },
 
    "grants": [
        {"src": ["YOUR_LOGIN"], "dst": ["*"], "ip": ["*"]},
-       {"src": ["autogroup:shared"], "dst": ["tag:shared"], "ip": ["8443"]},
+       {"src": ["autogroup:shared"], "dst": ["tag:share-pbs"], "ip": ["8443"]},
    ],
 
    "tests": [
        {"src": "YOUR_LOGIN", "accept": ["OTHER_NODE_IP:22"]},
-       {"src": "tag:shared", "deny": ["OTHER_NODE_IP:22"]},
+       {"src": "tag:share-pbs", "deny": ["OTHER_NODE_IP:22"]},
    ],
    ```
 
    Use your Tailscale login and the IP of one of your other nodes. If the allow-all grant stays, the tests fail.
 
-3. In **Machines**, apply the tag `shared` to the rclone node only. The console shows `shared`. The policy uses `tag:shared`.
+3. In **Machines**, apply the tag `share-pbs` to the rclone node only. The console shows `share-pbs`. The policy uses `tag:share-pbs`.
 4. Share the rclone node with your friend. Accept the rclone node that your friend shares with you.
 
 A shared node can receive connections. It cannot start connections. This is enough, because the PBS server of your friend starts the connection. Each person shares only the rclone node.
