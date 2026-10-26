@@ -53,12 +53,7 @@ if [ -f "$CONF/env" ]; then
   while IFS== read -r k v; do [ -n "${!k:-}" ] || printf -v "$k" %s "$v"; done < "$CONF/env"
 fi
 DATA_DIR=$(ask "Folder for the backups" "${DATA_DIR:-}")
-BUCKET=$(ask "Bucket name" "${BUCKET:-pbs}")
-PORT=$(ask "HTTPS port" "${PORT:-8443}")
-
 [ -n "$DATA_DIR" ] || die "The folder is empty."
-[ -n "$BUCKET" ] || die "The bucket name is empty."
-[[ $PORT =~ ^[0-9]+$ ]] || die "The port must be a number."
 # Without a mount, rclone writes to the disk of the LXC and can fill it.
 if ! mountpoint -q "$DATA_DIR"; then
   die "Warning!
@@ -69,6 +64,14 @@ rclone saves the backups on the disk of this LXC. If this disk is full, the LXC 
 
 You must mount a folder at $DATA_DIR and try again."
 fi
+# A mount can exist and still refuse writes, for example an NFS share with the wrong permissions.
+touch "$DATA_DIR/.share-pbs-test" 2>/dev/null || die "Cannot write to $DATA_DIR. Check the permissions of the folder."
+rm -f "$DATA_DIR/.share-pbs-test"
+
+BUCKET=$(ask "Bucket name" "${BUCKET:-pbs}")
+PORT=$(ask "HTTPS port" "${PORT:-8443}")
+[ -n "$BUCKET" ] || die "The bucket name is empty."
+[[ $PORT =~ ^[0-9]+$ ]] || die "The port must be a number."
 
 : >"$LOG"
 run 10 "Updating package lists" apt-get update
