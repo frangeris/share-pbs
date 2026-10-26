@@ -52,22 +52,29 @@ done
 if [ -f "$CONF/env" ]; then
   while IFS== read -r k v; do [ -n "${!k:-}" ] || printf -v "$k" %s "$v"; done < "$CONF/env"
 fi
-DATA_DIR=$(ask "Enter the folder for backups
+# An invalid folder shows its error and asks again. Cancel ends the script.
+while :; do
+  DATA_DIR=$(ask "Enter the folder for backups
 (must be a mounted disk, not the storage of this container)" "${DATA_DIR:-}")
-[ -n "$DATA_DIR" ] || die "The folder is empty."
-# Without a mount, rclone writes to the disk of the LXC and can fill it.
-if ! mountpoint -q "$DATA_DIR"; then
-  die "Warning!
+  if [ -z "$DATA_DIR" ]; then
+    msg "The folder is empty."
+  # Without a mount, rclone writes to the disk of the LXC and can fill it.
+  elif ! mountpoint -q "$DATA_DIR"; then
+    msg "Warning!
 
 $DATA_DIR is a simple folder in this container, not a mounted folder.
 
 rclone saves the backups on the disk of this LXC. If this disk is full, the LXC stops.
 
 You must mount a folder at $DATA_DIR and try again."
-fi
-# A mount can exist and still refuse writes, for example an NFS share with the wrong permissions.
-touch "$DATA_DIR/.share-pbs-test" 2>/dev/null || die "Cannot write to $DATA_DIR. Check the permissions of the folder."
-rm -f "$DATA_DIR/.share-pbs-test"
+  # A mount can exist and still refuse writes, for example an NFS share with the wrong permissions.
+  elif ! touch "$DATA_DIR/.share-pbs-test" 2>/dev/null; then
+    msg "Cannot write to $DATA_DIR. Check the permissions of the folder."
+  else
+    rm -f "$DATA_DIR/.share-pbs-test"
+    break
+  fi
+done
 
 BUCKET=$(ask "Bucket name" "${BUCKET:-pbs}")
 PORT=$(ask "HTTPS port" "${PORT:-8443}")
