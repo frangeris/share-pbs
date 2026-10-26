@@ -4,23 +4,24 @@
 
 > _Store your encrypted backups with a friend. Your friend stores their encrypted backups with you._
 
-Swap encrypted Proxmox Backup Server (PBS) backups with friends. Each person offers S3 storage to the other. Nobody gets access to the PBS server of the other.
+Swap encrypted Proxmox Backup Server (PBS) backups with friends. Your Proxmox host backs up to your own PBS server. Your PBS server pushes the backups to the PBS server of your friend.
 
-Each person runs two LXC containers: a PBS server and an rclone server. The rclone server shows a folder as S3 storage, and the PBS server of your friend writes its backups there. Tailscale connects the nodes. The backup data goes directly between them in an encrypted tunnel.
+Each person runs one PBS server in an LXC container. Tailscale connects the two PBS servers. The backup data goes directly between them in an encrypted tunnel.
 
-In your PBS, make one S3 datastore for each friend that stores your backups. Two friends give you two offsite copies.
+Your Proxmox host encrypts the backups before they leave the host. Your friend stores them and cannot read them.
+
+In your PBS, make one remote and one push sync job for each friend that stores your backups. Two friends give you two offsite copies.
 
 ## ✔ Requirements before start
 
-Make sure you have the following (proxmox and rclone LXC containers) installed and a Tailscale account:
+Make sure you have the following (PBS LXC container) installed and a Tailscale account:
 
-- [Proxmox Backup Server](https://community-scripts.org/scripts/proxmox-backup-server) 4.2 or later.
-- [rclone](https://community-scripts.org/scripts/rclone), the version must have the command `rclone serve s3`.
+- [Proxmox Backup Server](https://community-scripts.org/scripts/proxmox-backup-server) 3.3 or later.
 - [Tailscale](https://tailscale.com/download/linux) account
 
-> This guide only helps you to configure PBS and rclone assuming that are LXC. It does not install them, you need to do it before hand ⤴.
+> This guide only helps you to configure PBS assuming that is an LXC. It does not install it, you need to do it before hand ⤴.
 
-## 1️⃣ Start on your Proxmox host (assuming PBS / rclone are LXC)
+## 1️⃣ Start on your Proxmox host (assuming PBS is an LXC)
 
 As a container shares the kernel of the host. Only the host can give it `/dev/net/tun`.
 
@@ -30,37 +31,18 @@ _Make sure the host has the device_
 ls -l /dev/net/tun || modprobe tun
 ```
 
-_Add the device to **both** LXC containers, PBS and rclone, and reboot them. Set `PBS_CTID` and `RCLONE_CTID` to the container IDs_
+_Add the device to the PBS LXC container and reboot it. Set `PBS_CTID` to the container ID_
 
 ```bash
-PBS_CTID=<id of pbs> RCLONE_CTID=<id of rclone>
+PBS_CTID=<id of pbs>
 ```
 
 ```bash
-for id in $PBS_CTID $RCLONE_CTID; do \
-  grep -q net/tun /etc/pve/lxc/$id.conf || printf "%s\n" \
-    "lxc.cgroup2.devices.allow: c 10:200 rwm" \
-    "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file" \
-    >> /etc/pve/lxc/$id.conf; \
-  pct reboot $id; \
-done
-```
-
-rclone saves the backups in a folder. If the folder is not a mount point, the backups go to the system disk of the LXC. When this disk is full, the LXC stops.
-
-A mount point gives the folder its own storage. List the disks of the host and find the mount path of your disk:
-
-```bash
-df -h
-```
-
-> [!WARNING]
-> Do not copy the next command as it is. Replace `<path to disk>` with the mount path of your disk.
-
-Add the mount point and reboot the rclone LXC:
-
-```bash
-pct set $RCLONE_CTID -mp0 <path to disk>,mp=/mnt/backups-s3 && pct reboot $RCLONE_CTID
+grep -q net/tun /etc/pve/lxc/$PBS_CTID.conf || printf "%s\n" \
+  "lxc.cgroup2.devices.allow: c 10:200 rwm" \
+  "lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file" \
+  >> /etc/pve/lxc/$PBS_CTID.conf
+pct reboot $PBS_CTID
 ```
 
 ## 2️⃣ On PBS:
@@ -69,56 +51,129 @@ pct set $RCLONE_CTID -mp0 <path to disk>,mp=/mnt/backups-s3 && pct reboot $RCLON
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main/setup-pbs.sh)"
 ```
 
-## 3️⃣ On rclone:
+The script asks for two folders: one for your backups and one for the backups of your friend. Enter a mounted folder or a folder in the container. If a folder does not exist, the script makes it.
 
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/frangeris/share-pbs/main/setup-rclone.sh)"
-```
-
-## 4️⃣ Finally permissions (Tailscale)
+## 3️⃣ Permissions (Tailscale)
 
 > [!CAUTION]
-> Disable key expiry on both nodes. If a key expires, the backups stop.
+> Disable key expiry on the PBS node. If a key expires, the backups stop.
 
-In the Tailscale admin console, go to **Machines** and disable key expiry on the PBS node and on the rclone node.
+In the Tailscale admin console, go to **Machines** and disable key expiry on the PBS node.
 
 Go to **Access controls** and open the JSON editor. Delete the allow-all grant `{"src": ["*"], "dst": ["*"], "ip": ["*"]}` and add these entries:
 
 ```json
-"tagOwners": {
-    ...
-    "tag:share-pbs": ["autogroup:admin"],
-},
-
 "grants": [
     ...
-    {"src": ["autogroup:shared"], "dst": ["tag:share-pbs"], "ip": ["8443"]},
+    {"src": ["autogroup:shared"], "dst": ["<replace pbs ip>"], "ip": ["8007"]},
 ],
 
 "tests": [
     ...
-    {"src": "<your email>", "accept": ["<replace pbs ip>:8007", "<replace rclone ip>:8443"]},
-    {"src": "tag:share-pbs", "deny": ["<replace pbs ip>:8007"]},
+    {"src": "<your email>", "accept": ["<replace pbs ip>:8007"]},
 ],
 ```
 
-Replace the placeholders with your Tailscale email and the Tailscale IPs of the PBS node and the rclone node.
+Replace the placeholders with your Tailscale email and the Tailscale IP of the PBS node.
 
 > [!IMPORTANT]
-> Go back to **Machines** and apply the tag `share-pbs` to **the rclone node only**.
+> Do not tag the PBS node. A tagged node cannot connect to the node that your friend shares with you.
 >
-> Then share the rclone node with your friend and accept the rclone node that your friend shares with you.
+> Go back to **Machines**. Share the PBS node with your friend and accept the PBS node that your friend shares with you.
+
+## 4️⃣ Make the datastores
+
+In the PBS web interface:
+
+1. Go to **Datastore**. Select **Add Datastore**. Enter a name and enter the folder for your backups as **Backing Path**. This is the local datastore. It stores your backups.
+2. Make a second datastore with the folder for the backups of your friend as **Backing Path**. This is the incoming datastore. It stores the backups of your friend.
+
+   ![Add a datastore](assets/pbs-add-datastore.png)
+
+## 5️⃣ Connect Proxmox to PBS
+
+In the PBS web interface:
+
+1. Go to **Configuration**, **Access Control**, **User Management**. Select **Add** and make a user for Proxmox.
+
+   ![Add a PBS user](assets/pbs-add-user.png)
+
+2. Go to **Permissions**. Select **Add**, **User Permission**. Enter the path `/datastore/<local datastore>`, the user, and the role `DatastoreBackup`.
+
+   ![Add the permission](assets/pbs-add-permission.png)
+
+3. Go to **Dashboard**. Select **Show Fingerprint** and copy the fingerprint.
+
+   ![Show the fingerprint](assets/pbs-fingerprint.png)
+
+In the Proxmox web interface:
+
+4. Go to **Datacenter**, **Storage**, **Add**, **Proxmox Backup Server**.
+5. Enter an ID, the IP of your PBS, the user `<user>@pbs`, the password, the name of the local datastore, and the fingerprint.
+6. Select **Auto-generate a client encryption key** and select **Add**.
+
+   ![Add the PBS storage](assets/pve-add-storage.png)
+
+> [!CAUTION]
+> Without an encryption key, your friend can read the backups. If you lose the key, you cannot read the backups.
+> Save `/etc/pve/priv/storage/<ID>.enc` in a safe place.
+
+## 6️⃣ Make a backup job
+
+1. Go to **Datacenter**, **Backup**. Select **Add**.
+2. In **Storage**, select the PBS storage.
+3. Select the schedule. Select a small VM or container for the first test.
+4. Select **Create**.
+
+   ![Add the backup job](assets/pve-add-backup-job.png)
+
+5. Select the job and select **Run now**.
+
+   ![Run the backup job](assets/pve-run-backup-job.png)
+
+6. Select the PBS storage and go to **Backups**. Make sure that the backup is in the list.
+
+   ![Backups in the storage](assets/pve-backups-list.png)
+
+## 7️⃣ Send the backups to your friend
+
+In the PBS web interface:
+
+1. Go to **Configuration**, **Access Control**, **User Management**. Select **Add** and make a user for your friend.
+2. Go to **Permissions**. Select **Add**, **User Permission**. Enter the path `/datastore/<incoming datastore>`, the user of your friend, and the role `DatastoreBackup`.
+3. Send these values to your friend privately: the user, the password, the name of the incoming datastore, and the fingerprint of your PBS. Get the same values from your friend.
+4. Go to **Configuration**, **Remotes**. Select **Add**. Enter an ID, the Tailscale IP of the PBS node of your friend, the user, the password, and the fingerprint. Find the IP in **Machines** in the Tailscale admin console.
+
+   ![Add the remote](assets/pbs-add-remote.png)
+
+5. Go to **Datastore** and select the local datastore. Go to **Sync Jobs**. Select **Add** and make a push sync job. Select the remote, enter the name of the incoming datastore of your friend, and set the schedule. Select the option `encrypted-only`.
+
+   ![Add the sync job](assets/pbs-add-sync-job.png)
+
+6. Select the job and select **Run now**. Make sure that the task ends with `TASK OK`.
+
+## 8️⃣ Restore a backup
+
+1. Select the PBS storage and go to **Backups**.
+2. Select the backup and select **Restore**.
+3. For a test, enter a new ID. Do not restore over the original.
+
+   ![Restore the backup](assets/pve-restore.png)
+
+4. Select **Restore**.
 
 <details>
 <summary><h2>Prefer doing a manual install? ↓</h2></summary>
 
 Same steps as the script, by hand.
 
-### 1. PBS LXC
+### PBS LXC
 
 In the PBS LXC, as `root`:
 
 ```bash
+mkdir -p <folder for your backups> <folder for incoming backups>
+
 # Skip this line if the file does not exist. Without a subscription this repository returns 401.
 mv /etc/apt/sources.list.d/pbs-enterprise.sources /etc/apt/sources.list.d/pbs-enterprise.sources.disabled
 
@@ -132,182 +187,6 @@ tailscale ip -4
 
 Do not tag this node. Do not use `--accept-routes`.
 
-### 2. rclone LXC
-
-In the rclone LXC, as `root`. The commands use the folder `/srv/backups-s3`, the bucket `pbs`, and the port `8443`. To use other values, replace them in all commands.
-
-1. Check that the folder is a mount point. If it is not, rclone writes to the disk of the LXC.
-
-   ```bash
-   mountpoint /srv/backups-s3
-   ```
-
-2. Install the packages and join Tailscale:
-
-   ```bash
-   apt-get update
-   apt-get install -y curl jq openssl nftables
-   curl -fsSL https://tailscale.com/install.sh | sh
-   systemctl enable --now tailscaled
-   tailscale up
-   ```
-
-3. Make the folders and read the Tailscale name of the node:
-
-   ```bash
-   mkdir -p /srv/backups-s3/pbs /etc/rclone-s3
-   fqdn=$(tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')
-   ```
-
-4. Make the settings file with random keys:
-
-   ```bash
-   install -m 600 /dev/null /etc/rclone-s3/env
-   cat > /etc/rclone-s3/env <<EOF
-   DATA_DIR=/srv/backups-s3
-   PORT=8443
-   ACCESS_KEY=$(openssl rand -hex 12)
-   SECRET_KEY=$(openssl rand -hex 24)
-   EOF
-   ```
-
-5. Make a self-signed certificate for the Tailscale name:
-
-   ```bash
-   openssl req -x509 -newkey rsa:4096 -nodes -days 3650 \
-     -keyout /etc/rclone-s3/key.pem -out /etc/rclone-s3/cert.pem -subj "/CN=rclone" \
-     -addext "subjectAltName=DNS:$fqdn"
-   chmod 600 /etc/rclone-s3/key.pem
-   ```
-
-6. Block new connections from this LXC to the LAN:
-
-   ```bash
-   cat > /etc/rclone-s3/lan-block.nft <<'EOF'
-   table inet pbsshare
-   delete table inet pbsshare
-   table inet pbsshare {
-     chain out {
-       type filter hook output priority 0; policy accept;
-       ct state established,related accept
-       udp dport { 53, 67 } accept
-       tcp dport 53 accept
-       ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } drop
-       ip6 daddr fc00::/7 drop
-     }
-   }
-   EOF
-   ```
-
-7. Make the systemd service. If rclone is in another folder, for example `/opt/rclone/rclone`, use that path instead of `/usr/bin/rclone`:
-
-   ```bash
-   cat > /etc/systemd/system/rclone-s3.service <<'EOF'
-   [Unit]
-   Description=rclone S3 server
-   After=network-online.target tailscaled.service
-   Wants=network-online.target
-
-   [Service]
-   EnvironmentFile=/etc/rclone-s3/env
-   ExecStartPre=/usr/sbin/nft -f /etc/rclone-s3/lan-block.nft
-   ExecStart=/usr/bin/rclone serve s3 ${DATA_DIR} --addr :${PORT} --cert /etc/rclone-s3/cert.pem --key /etc/rclone-s3/key.pem --auth-key ${ACCESS_KEY},${SECRET_KEY}
-   Restart=on-failure
-
-   [Install]
-   WantedBy=multi-user.target
-   EOF
-   ```
-
-8. Start the service. The last command must show `active`:
-
-   ```bash
-   systemctl daemon-reload
-   systemctl enable --now rclone-s3
-   systemctl is-active rclone-s3
-   ```
-
-9. Show the five values and give them to your friend privately: endpoint, bucket, access key, secret key, fingerprint:
-
-   ```bash
-   echo "Endpoint: $fqdn:8443"
-   cat /etc/rclone-s3/env
-   openssl x509 -in /etc/rclone-s3/cert.pem -noout -fingerprint -sha256
-   ```
-
-If you change the port, use it in the access rules in step 3.
-
-### 3. Tailscale admin console
-
-1. In **Machines**, disable key expiry on the PBS node and on the rclone node.
-
-   CAUTION: DISABLE KEY EXPIRY ON BOTH NODES. IF A KEY EXPIRES, THE BACKUPS STOP.
-
-2. In **Access controls**, open the JSON editor. Delete the allow-all grant `{"src": ["*"], "dst": ["*"], "ip": ["*"]}`. Add these entries:
-
-   ```json
-   "tagOwners": {
-       "tag:share-pbs": ["autogroup:admin"],
-   },
-
-   "grants": [
-       {"src": ["YOUR_LOGIN"], "dst": ["*"], "ip": ["*"]},
-       {"src": ["autogroup:shared"], "dst": ["tag:share-pbs"], "ip": ["8443"]},
-   ],
-
-   "tests": [
-       {"src": "YOUR_LOGIN", "accept": ["OTHER_NODE_IP:22"]},
-       {"src": "tag:share-pbs", "deny": ["OTHER_NODE_IP:22"]},
-   ],
-   ```
-
-   Use your Tailscale login and the IP of one of your other nodes. If the allow-all grant stays, the tests fail.
-
-3. In **Machines**, apply the tag `share-pbs` to the rclone node only. The console shows `share-pbs`. The policy uses `tag:share-pbs`.
-4. Share the rclone node with your friend. Accept the rclone node that your friend shares with you.
-
-A shared node can receive connections. It cannot start connections. This is enough, because the PBS server of your friend starts the connection. Each person shares only the rclone node.
-
-If you tag the PBS node by mistake, you cannot remove the tag in the console. Enter `tailscale up --force-reauth` in the PBS LXC and sign in with your own user.
-
-Do not share the Tailscale node that you use for access to your rack. Sharing gives access to that node only, not to the subnet behind it.
-
-### 4. Test the isolation
-
-Use the IP of one of your other nodes.
-
-```bash
-# In the rclone LXC. The result must be 124 (timeout).
-timeout 3 bash -c '</dev/tcp/OTHER_NODE_IP/22'; echo $?
-
-# In the PBS LXC. The result must be 0.
-timeout 3 bash -c '</dev/tcp/OTHER_NODE_IP/22'; echo $?
-```
-
-### 5. Use the storage of your friend
-
-In the PBS web interface (`https://<ip>:8007`):
-
-1. Add an S3 endpoint. Enter the full Tailscale name of the rclone node of your friend, port `8443`, the access key, the secret key, and the fingerprint. Use path-style addressing.
-2. Add a datastore. Enter a name, select the S3 datastore type, select the endpoint, and enter the bucket `pbs`. For **Backing Path**, enter an empty folder for the local cache. The disk must have 64 to 128 GiB free.
-3. Make a PBS user or API token for PVE. Give it the role `DatastoreBackup` on this datastore only.
-
-In the PVE web interface:
-
-1. Add the datastore as a PBS storage. Enter the IP of your PBS, the user or token, the name of the datastore, and the fingerprint of your PBS (on the PBS **Dashboard**, select **Show Fingerprint**).
-2. Set an encryption key for the storage. PVE saves the key in `/etc/pve/priv/storage/<ID>.enc`. Copy it to a safe place.
-
-CAUTION: SET THE ENCRYPTION KEY BEFORE THE FIRST BACKUP. WITHOUT A KEY, YOUR FRIEND CAN READ THE BACKUPS.
-
-CAUTION: SAVE THE ENCRYPTION KEY IN A SAFE PLACE. IF YOU LOSE THE KEY, YOU CANNOT READ THE BACKUPS.
-
-### 6. Make sure that it works
-
-1. Start a backup job in PVE for a small VM or LXC.
-2. Make sure that the snapshot is in the datastore.
-3. Do a test restore to a new ID. Do not restore over the original.
-4. Do a test restore each week.
-
 </details>
 
 ## Access
@@ -315,16 +194,13 @@ CAUTION: SAVE THE ENCRYPTION KEY IN A SAFE PLACE. IF YOU LOSE THE KEY, YOU CANNO
 - The PBS web interface is at `https://<ip>:8007`.
 - For the first login, use the user `root` and the realm `Linux PAM standard authentication`. The password is the `root` password of the LXC. To set it, run `pct exec <CTID> passwd` on the host.
 - PBS users are separate from PVE users. In **Configuration**, **Access Control**, make a user `admin@pbs` with the role `Admin` for daily use.
-- Make a new access key and secret key for S3. Your friend stores the secret in their PBS. Do not use a Proxmox password.
 
 ## Recovery
 
-If your PBS server is lost, make a new PBS server. Create the datastore again with `reuse-datastore` and the same datastore name. You need the bucket access and your encryption key.
+If your PBS server is lost, make a new PBS server. Add the PBS server of your friend as a remote. Make a pull sync job from the incoming datastore of your friend to a new datastore. You need your encryption key.
 
 ## Limits
 
-- A restore reads the data from the home of your friend. The upload speed of your friend limits the restore time.
-- S3 storage does not encrypt data. Only the encryption key in PVE protects it.
-- The host cannot force the client to encrypt.
-- rclone has no permissions for each bucket. Run one rclone instance for each friend.
-- Each PBS cache needs 64 to 128 GiB.
+- A restore from the copy of your friend reads the data from the home of your friend. The upload speed of your friend limits the restore time.
+- Only the encryption key in PVE protects the backups. The option `encrypted-only` stops the push of backups without encryption.
+- The access rules for your user also apply to the PBS node. It can reach your other nodes.

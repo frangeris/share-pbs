@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 70 1200 350" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 70 1200 299" role="img" aria-labelledby="t d">
   <title id="t">Share Proxmox Backup Server</title>
-  <desc id="d">Alice and Bob each run PVE, PBS and rclone. The PBS of each person sends encrypted backups directly to a folder on the rclone server of the other person. Tailscale only helps the nodes find each other and carries no backup data.</desc>
+  <desc id="d">Alice and Bob each run PVE and PBS. The PVE of each person sends encrypted backups to its own PBS. The PBS of each person pushes the encrypted backups directly to the PBS of the other person. Tailscale only helps the nodes find each other and carries no backup data.</desc>
   <style>
     text{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
     .flow{fill:none;stroke-width:2.5;stroke-dasharray:7 7;animation:flow 1.2s linear infinite}
@@ -35,19 +35,18 @@
       <rect width="100" height="64" rx="12" fill="#0d0d0d" stroke="#fff" stroke-opacity=".22" stroke-width="1.5"/>
       <use href="#srv" x="36" y="10" width="28" height="20"/>
     </g>
-    <path id="folder" d="M0 14V58a6 6 0 0 0 6 6H94a6 6 0 0 0 6-6V20a6 6 0 0 0-6-6H44L36 4H6a6 6 0 0 0-6 6Z" stroke-width="1.5"/>
     <g id="pkt"><circle r="9" fill="currentColor" filter="url(#glow)"/><circle r="4.5" fill="currentColor"/></g>
   </defs>
 
-  <rect y="70" width="1200" height="350" rx="24" fill="url(#bg)"/>
+  <rect y="70" width="1200" height="299" rx="24" fill="url(#bg)"/>
 
   <!-- Panels -->
-  <rect x="40" y="100" width="400" height="296" rx="20" fill="#080808" stroke="#fff" stroke-opacity=".14"/>
-  <rect x="760" y="100" width="400" height="296" rx="20" fill="#080808" stroke="#fff" stroke-opacity=".14"/>
+  <rect x="40" y="100" width="400" height="245" rx="20" fill="#080808" stroke="#fff" stroke-opacity=".14"/>
+  <rect x="760" y="100" width="400" height="245" rx="20" fill="#080808" stroke="#fff" stroke-opacity=".14"/>
   <circle cx="66" cy="127" r="5" fill="#ff22d4"/>
   <text x="80" y="132" font-size="13" font-weight="600" letter-spacing="3" fill="#fff" fill-opacity=".6">ALICE</text>
-  <circle cx="786" cy="127" r="5" fill="#fff"/>
-  <text x="800" y="132" font-size="13" font-weight="600" letter-spacing="3" fill="#fff" fill-opacity=".6">BOB</text>
+  <circle cx="1134" cy="127" r="5" fill="#fff"/>
+  <text x="1120" y="132" text-anchor="end" font-size="13" font-weight="600" letter-spacing="3" fill="#fff" fill-opacity=".6">BOB</text>
 
   <!-- Tailscale only helps the nodes find each other: dotted lines, no packets -->
   <path d="M525 128H440M675 128H760" stroke="#fff" stroke-opacity=".4" stroke-width="2" stroke-linecap="round" stroke-dasharray="1 6" fill="none"/>
@@ -61,42 +60,32 @@
   <text x="600" y="168" text-anchor="middle" font-size="11" fill="#fff" fill-opacity=".6">finds peers, no data</text>
 
   <!-- Direct tunnel between the sites -->
-  <rect x="450" y="184" width="300" height="204" rx="24" fill="none" stroke="#ff22d4" stroke-width="5" stroke-opacity=".6" filter="url(#glow)"/>
-  <rect x="450" y="184" width="300" height="204" rx="24" fill="url(#tun)" stroke="#ff22d4" stroke-width="2"/>
-  <text x="600" y="352" text-anchor="middle" font-size="13" fill="#fff" fill-opacity=".7">S3 over TLS</text>
-  <rect x="505" y="373" width="190" height="30" rx="15" fill="#ff22d4"/>
-  <use href="#lock" x="521" y="381" width="12" height="14" color="#000"/>
-  <text x="541" y="393" font-size="13" font-weight="800" letter-spacing="2" fill="#000">DIRECT TUNNEL</text>
+  <rect x="450" y="184" width="300" height="126" rx="24" fill="none" stroke="#ff22d4" stroke-width="5" stroke-opacity=".6" filter="url(#glow)"/>
+  <rect x="450" y="184" width="300" height="126" rx="24" fill="url(#tun)" stroke="#ff22d4" stroke-width="2"/>
+  <text x="600" y="284" text-anchor="middle" font-size="13" fill="#fff" fill-opacity=".7">push sync over TLS</text>
+  <rect x="505" y="295" width="190" height="30" rx="15" fill="#ff22d4"/>
+  <use href="#lock" x="521" y="303" width="12" height="14" color="#000"/>
+  <text x="541" y="315" font-size="13" font-weight="800" letter-spacing="2" fill="#000">DIRECT TUNNEL</text>
 
   <!-- Flows: magenta is data of Alice, white is data of Bob -->
-  <path class="flow" d="M170 202H310" stroke="#ff22d4" marker-end="url(#mm)"/>
-  <path class="flow" d="M1030 202H890" stroke="#fff" marker-end="url(#mw)"/>
-  <path class="flow" d="M310 342H170" stroke="#fff" marker-end="url(#mw)"/>
-  <path class="flow" d="M890 342H1030" stroke="#ff22d4" marker-end="url(#mm)"/>
-  <path id="x1" class="flow" d="M410 202C600 202 600 342 790 342" stroke="#ff22d4" marker-end="url(#mm)"/>
-  <path id="x2" class="flow" d="M790 202C600 202 600 342 410 342" stroke="#fff" marker-end="url(#mw)"/>
+  <path class="flow" d="M170 222H310" stroke="#ff22d4" marker-end="url(#mm)"/>
+  <path class="flow" d="M1030 222H890" stroke="#fff" marker-end="url(#mw)"/>
+  <path id="x1" class="flow" d="M410 208H790" stroke="#ff22d4" marker-end="url(#mm)"/>
+  <path id="x2" class="flow" d="M790 236H410" stroke="#fff" marker-end="url(#mw)"/>
 
   <!-- Encryption on the PVE to PBS links -->
-  <use href="#lock" x="234" y="174" width="12" height="14" color="#ff22d4"/>
-  <text x="240" y="224" text-anchor="middle" font-size="11" fill="#fff" fill-opacity=".6">encrypted</text>
-  <use href="#lock" x="954" y="174" width="12" height="14" color="#fff"/>
-  <text x="960" y="224" text-anchor="middle" font-size="11" fill="#fff" fill-opacity=".6">encrypted</text>
+  <use href="#lock" x="234" y="194" width="12" height="14" color="#ff22d4"/>
+  <text x="240" y="244" text-anchor="middle" font-size="11" fill="#fff" fill-opacity=".6">encrypted</text>
+  <use href="#lock" x="954" y="194" width="12" height="14" color="#fff"/>
+  <text x="960" y="244" text-anchor="middle" font-size="11" fill="#fff" fill-opacity=".6">encrypted</text>
 
   <!-- Alice -->
-  <use href="#node" x="70" y="170"/><text x="120" y="220" text-anchor="middle" font-size="15" font-weight="600" fill="#fff">PVE</text>
-  <use href="#node" x="310" y="170"/><text x="360" y="220" text-anchor="middle" font-size="15" font-weight="600" fill="#fff">PBS</text>
-  <use href="#node" x="310" y="310"/><text x="360" y="360" text-anchor="middle" font-size="15" font-weight="600" fill="#fff">rclone</text>
-  <use href="#folder" x="70" y="310" fill="#fff" fill-opacity=".1" stroke="#fff"/>
-  <use href="#lock" x="96" y="341" width="12" height="14" color="#fff"/>
-  <text x="114" y="354" font-size="15" font-weight="600" fill="#fff">bob</text>
+  <use href="#node" x="70" y="190"/><text x="120" y="240" text-anchor="middle" font-size="15" font-weight="600" fill="#fff">PVE</text>
+  <use href="#node" x="310" y="190"/><text x="360" y="240" text-anchor="middle" font-size="15" font-weight="600" fill="#fff">PBS</text>
 
   <!-- Bob -->
-  <use href="#node" x="1030" y="170"/><text x="1080" y="220" text-anchor="middle" font-size="15" font-weight="600" fill="#fff">PVE</text>
-  <use href="#node" x="790" y="170"/><text x="840" y="220" text-anchor="middle" font-size="15" font-weight="600" fill="#fff">PBS</text>
-  <use href="#node" x="790" y="310"/><text x="840" y="360" text-anchor="middle" font-size="15" font-weight="600" fill="#fff">rclone</text>
-  <use href="#folder" x="1030" y="310" fill="#ff22d4" fill-opacity=".14" stroke="#ff22d4"/>
-  <use href="#lock" x="1053" y="341" width="12" height="14" color="#ff22d4"/>
-  <text x="1071" y="354" font-size="15" font-weight="600" fill="#ff22d4">alice</text>
+  <use href="#node" x="1030" y="190"/><text x="1080" y="240" text-anchor="middle" font-size="15" font-weight="600" fill="#fff">PVE</text>
+  <use href="#node" x="790" y="190"/><text x="840" y="240" text-anchor="middle" font-size="15" font-weight="600" fill="#fff">PBS</text>
 
   <!-- Packets that cross between the sites -->
   <use href="#pkt" class="pkt" color="#ff22d4">
